@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workflow Canvas</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; }
+        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; }
+        .login-box { background: white; padding: 50px; border-radius: 12px; text-align: center; width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .login-box h1 { font-size: 32px; margin-bottom: 10px; color: #333; }
+        .login-box p { color: #666; margin-bottom: 30px; }
+        button { width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .btn-blue { background: #2188d4; color: white; }
+        .btn-blue:hover { background: #1c7fb8; }
+        .btn-white { background: #f0f0f0; color: #333; border: 1px solid #ddd; }
+        .btn-white:hover { background: #e0e0e0; }
+        .app-main { display: none; width: 100vw; height: 100vh; flex-direction: column; background: white; }
+        .app-main.active { display: flex; }
+        .header { background: white; border-bottom: 1px solid #ddd; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { margin: 0; }
+        .user-info { display: flex; gap: 15px; align-items: center; }
+        .main-content { display: flex; flex: 1; }
+        .sidebar { width: 280px; background: #f5f5f5; border-right: 1px solid #ddd; padding: 20px; overflow-y: auto; }
+        .sidebar h3 { font-size: 11px; font-weight: 600; text-transform: uppercase; color: #999; margin: 20px 0 10px; }
+        .menu-item { padding: 10px; margin: 5px 0; border-radius: 6px; cursor: pointer; }
+        .menu-item:hover { background: #e8e8e8; }
+        .menu-item.active { background: #2188d4; color: white; }
+        .canvas-wrapper { flex: 1; position: relative; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); overflow: hidden; }
+        canvas { position: absolute; background: white; cursor: crosshair; }
+        .toolbar { position: absolute; top: 15px; left: 15px; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; gap: 5px; flex-wrap: wrap; width: 600px; z-index: 100; }
+        .toolbar button { width: auto; padding: 6px 12px; margin: 0; font-size: 12px; border: 1px solid #ddd; background: white; cursor: pointer; }
+        .toolbar button:hover { background: #f5f5f5; }
+        .toolbar button.active { background: #2188d4; color: white; border-color: #2188d4; }
+        .info-box { position: absolute; bottom: 15px; right: 15px; background: white; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 12px; max-width: 300px; }
+    </style>
+</head>
+<body>
+    <div class="login-box" id="loginBox">
+        <h1>📊 Workflow Canvas</h1>
+        <p>팀과 함께 실시간으로 업무 플로우를 그려보세요</p>
+        <button class="btn-blue" onclick="startApp()">🔐 구글 계정으로 로그인</button>
+        <button class="btn-white" onclick="startApp()">게스트로 시작</button>
+    </div>
+
+    <div class="app-main" id="appMain">
+        <div class="header">
+            <h1>📊 Workflow Canvas</h1>
+            <div class="user-info">
+                <span id="username">사용자</span>
+                <button onclick="exitApp()" style="width: 100px;">로그아웃</button>
+            </div>
+        </div>
+        <div class="main-content">
+            <div class="sidebar">
+                <h3>📋 보드</h3>
+                <div class="menu-item active">프로젝트 A</div>
+                <div class="menu-item">프로젝트 B</div>
+                <div class="menu-item">프로젝트 C</div>
+                <h3>👥 팀원</h3>
+                <div class="menu-item">👤 당신</div>
+                <div class="menu-item" id="teamMember" style="display:none;">👥 팀원</div>
+            </div>
+            <div class="canvas-wrapper">
+                <div class="toolbar">
+                    <button class="active" onclick="chooseTool('select', this)">선택</button>
+                    <button onclick="chooseTool('draw', this)">✏️ 그리기</button>
+                    <button onclick="chooseTool('box', this)">📦 박스</button>
+                    <button onclick="chooseTool('circle', this)">⭕ 원</button>
+                    <button onclick="chooseTool('line', this)">➡️ 선</button>
+                    <button onclick="deleteAll()">🗑️ 지우기</button>
+                    <button onclick="downloadImage()">💾 저장</button>
+                </div>
+                anvas id="mainCanvas"></canvas>
+                <div class="info-box">
+                    <strong>💡 팁:</strong> 도구를 선택하고 캔버스에 드래그해서 그려보세요!<br>
+                    📐 총 요소: <span id="elementCount">0</span>개
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let canvas, ctx;
+        let currentTool = 'select';
+        let isMouseDown = false;
+        let shapes = [];
+        let startX = 0, startY = 0;
+
+        function startApp() {
+            const names = ['김민수', '박영희', '이준호', '정소연'];
+            const randomName = names[Math.floor(Math.random() * names.length)];
+            
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('appMain').classList.add('active');
+            document.getElementById('username').textContent = randomName;
+            
+            setTimeout(initializeCanvas, 100);
+            
+            setTimeout(() => {
+                document.getElementById('teamMember').style.display = 'block';
+            }, 2000);
+        }
+
+        function exitApp() {
+            document.getElementById('appMain').classList.remove('active');
+            document.getElementById('loginBox').style.display = 'block';
+        }
+
+        function initializeCanvas() {
+            canvas = document.getElementById('mainCanvas');
+            ctx = canvas.getContext('2d');
+            const wrapper = document.querySelector('.canvas-wrapper');
+            canvas.width = wrapper.clientWidth;
+            canvas.height = wrapper.clientHeight;
+            redraw();
+        }
+
+        function redraw() {
+            if (!ctx) return;
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.strokeStyle = 'rgba(200, 200, 200, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            
+            shapes.forEach(shape => {
+                ctx.lineWidth = 2;
+                if (shape.type === 'box') {
+                    ctx.strokeStyle = '#2188d4';
+                    ctx.fillStyle = 'rgba(33, 136, 212, 0.1)';
+                    ctx.fillRect(shape.x, shape.y, shape.w, shape.h);
+                    ctx.strokeRect(shape.x, shape.y, shape.w, shape.h);
+                } else if (shape.type === 'circle') {
+                    ctx.strokeStyle = '#28a745';
+                    ctx.fillStyle = 'rgba(40, 167, 69, 0.1)';
+                    ctx.beginPath();
+                    ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                } else if (shape.type === 'line') {
+                    ctx.strokeStyle = '#dc3545';
+                    ctx.beginPath();
+                    ctx.moveTo(shape.x1, shape.y1);
+                    ctx.lineTo(shape.x2, shape.y2);
+                    ctx.stroke();
+                } else if (shape.type === 'draw') {
+                    ctx.strokeStyle = '#6f42c1';
+                    ctx.beginPath();
+                    shape.points.forEach((p, i) => {
+                        if (i === 0) ctx.moveTo(p[0], p[1]);
+                        else ctx.lineTo(p[0], p[1]);
+                    });
+                    ctx.stroke();
+                }
+            });
+            document.getElementById('elementCount').textContent = shapes.length;
+        }
+
+        function chooseTool(tool, button) {
+            currentTool = tool;
+            document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active'));
+            button.classList.add('active');
+        }
+
+        function deleteAll() {
+            if (confirm('정말 모두 지우시겠습니까?')) {
+                shapes = [];
+                redraw();
+            }
+        }
+
+        function downloadImage() {
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = 'workflow-' + new Date().toISOString().slice(0, 10) + '.png';
+            link.click();
+        }
+
+        canvas?.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isMouseDown = true;
+            
+            if (currentTool === 'draw') {
+                window.drawPath = [[startX, startY]];
+            }
+        });
+
+        canvas?.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            if (currentTool === 'draw') {
+                window.drawPath.push([x, y]);
+                redraw();
+                ctx.strokeStyle = '#6f42c1';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                window.drawPath.forEach((p, i) => {
+                    if (i === 0) ctx.moveTo(p[0], p[1]);
+                    else ctx.lineTo(p[0], p[1]);
+                });
+                ctx.stroke();
+            }
+        });
+
+        canvas?.addEventListener('mouseup', (e) => {
+            if (!isMouseDown) return;
+            const rect = canvas.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            const endY = e.clientY - rect.top;
+            
+            if (currentTool === 'box') {
+                shapes.push({
+                    type: 'box',
+                    x: startX,
+                    y: startY,
+                    w: endX - startX,
+                    h: endY - startY
+                });
+            } else if (currentTool === 'circle') {
+                shapes.push({
+                    type: 'circle',
+                    x: startX,
+                    y: startY,
+                    r: Math.hypot(endX - startX, endY - startY)
+                });
+            } else if (currentTool === 'line') {
+                shapes.push({
+                    type: 'line',
+                    x1: startX,
+                    y1: startY,
+                    x2: endX,
+                    y2: endY
+                });
+            } else if (currentTool === 'draw' && window.drawPath && window.drawPath.length > 1) {
+                shapes.push({
+                    type: 'draw',
+                    points: window.drawPath
+                });
+            }
+            
+            isMouseDown = false;
+            redraw();
+        });
+
+        window.addEventListener('resize', () => {
+            if (canvas) {
+                const wrapper = document.querySelector('.canvas-wrapper');
+                canvas.width = wrapper.clientWidth;
+                canvas.height = wrapper.clientHeight;
+                redraw();
+            }
+        });
+    </script>
+</body>
+</html>
